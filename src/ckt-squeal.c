@@ -51,10 +51,6 @@ void ramp (		/* Ramp-up/down audio output (anti-pop feature) */
 	} while (--n);
 }
 
-volatile uint8_t ticks250kHz = 0;
-volatile uint8_t ticks1kHz = 0;
-volatile uint8_t doInputSample = 0;
-
 static void audio_on (void)	/* Enable audio output functions */
 {
 	if (!TCCR0B) {
@@ -81,12 +77,16 @@ static uint32_t load_header (void)	/* 2:I/O error, 4:Invalid file, >=1024:Ok(num
 
 	while (1)
 	{
-		if (pf_read(Buff, 8, &rb)) return 2;		/* Get Chunk ID and size */
-		if (rb != 8) return 4;
-		sz = LD_DWORD(&Buff[4]);		/* Chunk size */
+		if (pf_read(Buff, 8, &rb)) 
+			return 2;		/* Get Chunk ID and size */
+
+		if (rb != 8) 
+			return 4;
+
+		sz = LD_DWORD(Buff + 4);		/* Chunk size */
 
 		/* Switch by chunk type */
-		switch (LD_DWORD(&Buff[0])) 
+		switch (LD_DWORD(Buff + 0)) 
 		{
 			case FCC('f','m','t',' ') :		/* 'fmt ' chunk */
 				if (sz & 1) sz++;
@@ -101,7 +101,7 @@ static uint32_t load_header (void)	/* 2:I/O error, 4:Invalid file, >=1024:Ok(num
 				if (b != 8 && b != 16) return 4;		/* Check resolution (8/16 bit) */
 				GPIOR0 |= b;							/* Save resolution flag */
 				if (b & 16) al <<= 1;
-				f = LD_DWORD(&Buff[4]);					/* Check sampling freqency (8k-48k) */
+				f = LD_DWORD(Buff + 4);					/* Check sampling freqency (8k-48k) */
 				if (f < 8000 || f > 48000) return 4;
 				OCR0A = (uint8_t)(16000000UL/8/f) - 1;		/* Set interval timer (sampling period) */
 				break;
@@ -135,7 +135,7 @@ static inline void playIndicatorOff()
 	PORTA &= ~_BV(PA3);
 }
 
-uint8_t io_input = 0;
+uint8_t io_input = 0xFF;
 uint8_t randomizer = 0;
 
 uint8_t debounce_inputs()
@@ -157,52 +157,74 @@ uint8_t debounce_inputs()
 
 uint8_t levelTriggerMask = 0;
 
+#define EVENT_TRIGGER_LEVEL      0x01
+#define EVENT_RETRIGGERABLE      0x02
+#define EVENT_RANDOM_RETRIG      0x06
+
 uint8_t terminationCallback()
 {
 		debounce_inputs();
 		return (levelTriggerMask & (io_input))?1:0;
 }
 
-static uint8_t play(uint8_t (*terminationCallback)())
+uint8_t debouncingCallback()
+{
+		debounce_inputs();
+		return 0;
+}
+
+
+static uint8_t play(uint8_t (*terminationCallback)(), uint8_t flags)
 {
 	uint32_t sz;
 	FRESULT res;
 	uint16_t btr;
 	uint16_t rb;
+	uint32_t fptr_storage, sz_storage;
 
 	res = pf_open((char*)Buff);		/* Open sound file */	
 	FifoCt = 0; FifoRi = 0; FifoWi = 0;	/* Reset audio FIFO */
 
 	if (FR_OK == res)
 	{
-		sz = load_header();			/* Check file format and ready to play */
-		if (sz < 1024) return 255;	/* Cannot play this file */
+		do
+		{
+			sz = load_header();			/* Check file format and ready to play */
+			if (sz < 1024) return 255;	/* Cannot play this file */
 
-		playIndicatorOn();
+			playIndicatorOn();
 
-		pf_read(0, 512 - (Fs.fptr % 512), &rb);	/* Snip sector unaligned part */
-		sz -= rb;
-		do {	/* Data transfer loop */
-			wdt_reset();
-			if (NULL != terminationCallback)
-			{
-				if (terminationCallback())
+			pf_read(0, 512 - (Fs.fptr % 512), &rb);	/* Snip sector unaligned part */
+			sz -= rb;
+			do {	/* Data transfer loop */
+				wdt_reset();
+				if (NULL != terminationCallback)
 				{
-					FifoCt = 2;
-					break;
+					if (terminationCallback())
+					{
+						FifoCt = 2;
+						break;
+					}
 				}
+				btr = (sz > 1024) ? 1024 : (WORD)sz;/* A chunk of audio data */
+				res = pf_read(0, btr, &rb);	/* Forward the data into audio FIFO */
+				if (rb != 1024)
+					break;		/* Break on error or end of data */
+				sz -= rb;					/* Decrease data counter */
+			} while (1);
+			
+			if (flags & EVENT_RETRIGGERABLE)
+			{
+				res = pf_open((char*)Buff);
+				sz = load_header();			/* Check file format and ready to play */
+				if (sz < 1024)
+					break;
 			}
-			btr = (sz > 1024) ? 1024 : (WORD)sz;/* A chunk of audio data */
-			res = pf_read(0, btr, &rb);	/* Forward the data into audio FIFO */
-			if (rb != 1024)
-				break;		/* Break on error or end of data */
-			sz -= rb;					/* Decrease data counter */
-		} while (1);
-
-	
+			
+		} while (flags & EVENT_RETRIGGERABLE);
 	}
 
-	while (FifoCt) ;			/* Wait for audio FIFO empty */
+	while(FifoCt);
 	OCR1A = 0x80; OCR1B = 0x80;	/* Return DAC out to center */
 	playIndicatorOff();
 	return res;
@@ -246,23 +268,19 @@ uint8_t getFilenum(uint8_t eventNum, uint8_t fileNum)
 		
 }
 
-/*-----------------------------------------------------------------------*/
-/* Main                                                                  */
-
 int main (void)
 {
 	FRESULT res;
 	char *dir;
 	uint8_t changes, i;
 	uint8_t fsActive = 0;
-	uint8_t filesInDirs[4];
+	uint8_t eventWavFiles[4];
+	uint8_t eventTriggerOptions[4];
+	uint8_t last_io_input = 0xFF;	
 
 	
-	MCUSR = 0;								/* Clear reset status */
-//	WDTCR = _BV(WDE) | 0b110;			/* Enable WDT (1s) */
-	WDTCR = 0b110;			/* Enable WDT (1s) */
-	PCMSK0 = 0b11111000;					/* Select pin change interrupt pins (SW1..SW8) */
-	PCMSK1 = 0b01110000;
+	MCUSR = 0;								// Clear reset status
+	WDTCR = _BV(WDE) | _BV(WDP3);		// Enable WDT (2s)
 
 	/* Initialize ports */
 	PORTA = 0b11110011;		/* PORTA [pppppLHp]*/
@@ -284,14 +302,15 @@ int main (void)
 			if (FR_OK != pf_mount(&Fs))
 				continue;
 			
-			for (i=0; i<3; i++)
+			for (i=0; i<4; i++)
 			{
-				filesInDirs[i] = 0;
+				eventWavFiles[i] = 0;
+				eventTriggerOptions[i] = 0;
 				memset(Buff, 0, sizeof(Buff));
 				strcpy_P((char*)Buff, PSTR("eventX"));
 				Buff[5] = i + '1';
 								
-				if (FR_OK != pf_opendir(&Dir, Buff))
+				if (FR_OK != pf_opendir(&Dir, (const char*)Buff))
 					continue;
 
 				if (FR_OK != pf_readdir(&Dir, 0))
@@ -299,56 +318,94 @@ int main (void)
 				
 				do
 				{
+					wdt_reset();
 					if (FR_OK == (res = pf_readdir(&Dir, &Fno)))
 					{
 						if (!Fno.fname[0])
 							break;	// Break on error or end of dir
-						if (!(Fno.fattrib & (AM_DIR|AM_HID)) && strstr(Fno.fname, ".WAV"))
-							filesInDirs[i]++;
+						if (!(Fno.fattrib & (AM_DIR|AM_HID)))
+						{
+							if(strstr_P(Fno.fname, PSTR(".WAV")))
+								eventWavFiles[i]++;
+							else
+							{
+								if (strstr_P(Fno.fname, PSTR("LVLTRIG.OPT")))
+									eventTriggerOptions[i] |= EVENT_TRIGGER_LEVEL;
+								else if (strstr_P(Fno.fname, PSTR("RETRIG.OPT")))
+									eventTriggerOptions[i] |= EVENT_RETRIGGERABLE;
+								else if (strstr_P(Fno.fname, PSTR("RNDRTRG.OPT")))
+									eventTriggerOptions[i] |= EVENT_RANDOM_RETRIG;
+
+							}
+						}
 					}
 				
 				} while (FR_OK == res);
 			}
 			fsActive = 1;
-			PORTB |= _BV(PB4);
 		}
 		
 		// If we can't get the filesystem, then it doesn't matter - we can't play anything anyway
 		// Go back around and try again
 		if (!fsActive)
 			continue;
-	
-	
-		if (FR_OK != pf_opendir(&Dir, ""))
-		{
-			fsActive = 0;
-			continue;
-		}
-	
-		if (1)
-		{
-			changes = debounce_inputs();
-			doInputSample = 0;
-		}
 
+		PORTB |= _BV(PB4);
+	
+		debounce_inputs();
 
-		if (changes & ~(io_input))
+		for(i=0; i<4; i++)
 		{
-			uint8_t buttonPushed = changes & (~io_input);
-
-			for(i=0; i<3; i++)
+			uint8_t isDown = (~io_input) & (1<<i);
+			wdt_reset();
+			levelTriggerMask = 0;
+			
+			if ((eventTriggerOptions[i] & EVENT_TRIGGER_LEVEL) && (isDown))
 			{
-				if (buttonPushed & (1<<i))
+				// Level triggered sound and line is grounded - play
+				if (0 == getFilenum(i, randomizer % eventWavFiles[i]))
 				{
-					levelTriggerMask = buttonPushed & (1<<i);
-					if (0 == getFilenum(i, randomizer % filesInDirs[i]))
-						play(&terminationCallback);
-					break;
-				}
+					do 
+					{
+						wdt_reset();
+						levelTriggerMask = (1<<i);
+						
+						play(&terminationCallback, eventTriggerOptions[i] & EVENT_RETRIGGERABLE);
+
+						if (EVENT_RANDOM_RETRIG & eventTriggerOptions[i])
+						{
+							if (0 != getFilenum(i, randomizer % eventWavFiles[i]))
+								break;
+						}
+					} while ((~io_input) & (1<<i));
+				} 
+				break;
 			}
+			else if (((~io_input) & (1<<i)) & ~(last_io_input))
+			{
+				// Edge triggered and fell since last time
+				last_io_input |= (~io_input) & (1<<i);
+				
+				// Level triggered sound and line is grounded - play
+				if (0 == getFilenum(i, randomizer % eventWavFiles[i]))
+				{
+					do 
+					{
+						wdt_reset();
+						play(&debouncingCallback, eventTriggerOptions[i] & EVENT_RETRIGGERABLE);
+
+						if (EVENT_RANDOM_RETRIG & eventTriggerOptions[i])
+						{
+							if (0 != getFilenum(i, randomizer % eventWavFiles[i]))
+								break;
+						}
+					} while (eventTriggerOptions[i] & EVENT_RETRIGGERABLE && ((~io_input) & (1<<i)));
+				}
+				break;
+			}
+			
+			last_io_input = io_input;
 		}
-		
-		
 	}
 }
 
