@@ -173,24 +173,39 @@ uint8_t debouncingCallback()
 		return 0;
 }
 
-
 static uint8_t play(uint8_t (*terminationCallback)(), uint8_t flags)
 {
 	uint32_t sz;
 	FRESULT res;
 	uint16_t btr;
 	uint16_t rb;
-	uint32_t fptr_storage, sz_storage;
+	uint32_t fptr, org_clust, curr_clust, fsize, sz_save;
+		
 
 	res = pf_open((char*)Buff);		/* Open sound file */	
 	FifoCt = 0; FifoRi = 0; FifoWi = 0;	/* Reset audio FIFO */
 
 	if (FR_OK == res)
 	{
+		sz = load_header();			/* Check file format and ready to play */
+		if (flags & EVENT_RETRIGGERABLE)
+		{
+			fptr = Fs.fptr;
+			org_clust = Fs.org_clust;
+			curr_clust = Fs.curr_clust;
+			fsize = Fs.fsize;
+			sz_save = sz;
+		}
+
 		do
 		{
-			sz = load_header();			/* Check file format and ready to play */
-			if (sz < 1024) return 255;	/* Cannot play this file */
+
+			if (sz < 1024)
+			{
+				OCR1A = OCR1B = 0x80;	/* Return DAC out to center */
+				playIndicatorOff();			
+				return 255;	/* Cannot play this file */
+			}
 
 			playIndicatorOn();
 
@@ -203,6 +218,7 @@ static uint8_t play(uint8_t (*terminationCallback)(), uint8_t flags)
 					if (terminationCallback())
 					{
 						FifoCt = 2;
+						flags &= ~EVENT_RETRIGGERABLE;
 						break;
 					}
 				}
@@ -215,10 +231,11 @@ static uint8_t play(uint8_t (*terminationCallback)(), uint8_t flags)
 			
 			if (flags & EVENT_RETRIGGERABLE)
 			{
-				res = pf_open((char*)Buff);
-				sz = load_header();			/* Check file format and ready to play */
-				if (sz < 1024)
-					break;
+				Fs.fptr = fptr;
+				Fs.org_clust = org_clust;
+				Fs.curr_clust = curr_clust;
+				Fs.fsize = fsize;
+				sz = sz_save;
 			}
 			
 		} while (flags & EVENT_RETRIGGERABLE);
