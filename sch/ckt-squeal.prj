@@ -1,0 +1,6 @@
+schematics ckt-squeal.sch
+output-name ../pcb/ckt-squeal
+skip-m4
+elements-dir ../../footprints
+
+
