@@ -9,9 +9,9 @@ T 57100 35500 9 10 1 0 0 0 1
 1
 T 59500 35500 9 10 1 0 0 0 1
 Nathan D. Holmes
-T 57300 36900 9 10 1 0 0 0 3
+T 56100 37000 9 10 1 0 0 0 3
 Notes:
-1) All capacitors are ceramic (X7R/X5R) unless otherwise noted.
+1) All unpolarized capacitors are ceramic (X7R/X5R) unless otherwise noted.
 2) All capacitors and resistors are 0805 unless otherwise noted.
 C 42900 40400 1 90 0 resistor-1.sym
 {
@@ -45,7 +45,7 @@ C 43800 43700 1 0 0 tiny861-mlf32.sym
 T 48800 47600 5 10 1 1 0 6 1
 refdes=U4
 T 44100 50500 5 10 0 0 0 0 1
-device=ATMega328-TQFP32
+device=ATTiny861-MLP32
 T 44100 50700 5 10 0 0 0 0 1
 footprint=TQFP32_7
 }
@@ -55,6 +55,8 @@ T 42000 47200 5 10 0 1 0 6 1
 device=AVRPROG
 T 41400 45300 5 10 1 1 0 6 1
 refdes=J3
+T 42000 45600 5 10 0 0 0 0 1
+footprint=JUMPER3x2
 }
 N 42000 46600 44100 46600 4
 N 44100 46900 40300 46900 4
@@ -129,6 +131,8 @@ T 53300 39150 5 10 1 1 0 5 1
 device=LM4864
 T 52800 39050 5 10 1 1 0 6 1
 refdes=U5
+T 51300 37400 5 10 0 0 0 0 1
+footprint=SO8
 }
 C 50600 38200 1 180 0 resistor-1.sym
 {
@@ -187,6 +191,8 @@ T 55300 38450 5 10 0 0 0 0 1
 device=TERMBLK2
 T 54700 38700 5 10 1 1 0 0 1
 refdes=J4
+T 54300 37800 5 10 0 0 0 0 1
+footprint=TERMBLK2_200MIL
 }
 N 54300 38000 53600 38000 4
 N 54300 38400 53300 38400 4
@@ -225,6 +231,8 @@ T 44200 50900 5 10 1 1 0 8 1
 value=68uF
 T 43800 50500 5 10 1 1 0 0 1
 description=25V
+T 44100 50400 5 10 0 0 0 0 1
+footprint=cap-elec-Panasonic-FK--D6.30-H5.80-mm
 }
 C 53600 40600 1 270 0 capacitor-1.sym
 {
@@ -276,6 +284,8 @@ T 39800 50450 5 10 0 0 0 6 1
 device=TERMBLK2
 T 40400 50700 5 10 1 1 0 6 1
 refdes=J1
+T 40800 49800 5 10 0 0 0 0 1
+footprint=TERMBLK2_200MIL
 }
 C 43100 50400 1 270 0 capacitor-1.sym
 {
@@ -305,6 +315,8 @@ T 44800 50900 5 10 1 1 0 8 1
 value=68uF
 T 44400 50500 5 10 1 1 0 0 1
 description=25V
+T 44700 50400 5 10 0 0 0 0 1
+footprint=cap-elec-Panasonic-FK--D6.30-H5.80-mm
 }
 N 40800 49500 51500 49500 4
 N 45600 49500 45600 49800 4
@@ -413,6 +425,8 @@ T 49600 49900 5 10 1 1 0 0 1
 device=TLV1117
 T 50000 50900 5 10 1 1 0 6 1
 refdes=U2
+T 48700 49800 5 10 0 0 0 0 1
+footprint=SOT223
 }
 N 50300 50400 50300 50600 4
 C 47600 50400 1 90 1 Cap_H-2.sym
@@ -425,6 +439,8 @@ T 47700 50900 5 10 1 1 0 8 1
 value=100uF
 T 47100 50500 5 10 1 1 0 0 1
 description=6.3V Ta
+T 47600 50400 5 10 0 0 0 0 1
+footprint=tantalum_b
 }
 C 51000 50400 1 90 1 Cap_H-2.sym
 {
@@ -436,6 +452,8 @@ T 51100 50900 5 10 1 1 0 8 1
 value=100uF
 T 50500 50500 5 10 1 1 0 0 1
 description=6.3V Ta
+T 51000 50400 5 10 0 0 0 0 1
+footprint=tantalum_b
 }
 C 51300 50400 1 270 0 capacitor-1.sym
 {
@@ -469,6 +487,8 @@ T 60700 45150 5 10 0 0 0 0 1
 device=TERMBLK2
 T 60600 44800 5 10 1 1 0 0 1
 refdes=J5
+T 59700 44500 5 10 0 0 0 0 1
+footprint=TERMBLK2_200MIL
 }
 C 59700 42900 1 0 0 termblk2-1.sym
 {
@@ -476,6 +496,8 @@ T 60700 43550 5 10 0 0 0 0 1
 device=TERMBLK2
 T 60600 43300 5 10 1 1 0 0 1
 refdes=J7
+T 59700 42900 5 10 0 0 0 0 1
+footprint=TERMBLK2_200MIL
 }
 C 59700 43700 1 0 0 termblk2-1.sym
 {
@@ -483,6 +505,8 @@ T 60700 44350 5 10 0 0 0 0 1
 device=TERMBLK2
 T 60600 44100 5 10 1 1 0 0 1
 refdes=J6
+T 59700 43700 5 10 0 0 0 0 1
+footprint=TERMBLK2_200MIL
 }
 N 59700 44300 59700 43900 4
 N 59700 44100 58100 44100 4
@@ -545,6 +569,8 @@ T 44150 42750 5 10 0 0 0 6 1
 device=LED
 T 44650 42650 5 10 1 1 0 6 1
 refdes=D4
+T 45100 42100 5 10 0 0 0 0 1
+footprint=1206
 }
 C 45100 41300 1 0 1 led-3.sym
 {
@@ -552,6 +578,8 @@ T 44150 41950 5 10 0 0 0 6 1
 device=LED
 T 44650 41850 5 10 1 1 0 6 1
 refdes=D5
+T 45100 41300 5 10 0 0 0 0 1
+footprint=1206
 }
 C 45100 42900 1 0 1 led-3.sym
 {
@@ -559,6 +587,8 @@ T 44150 43550 5 10 0 0 0 6 1
 device=LED
 T 44650 43450 5 10 1 1 0 6 1
 refdes=D3
+T 45100 42900 5 10 0 0 0 0 1
+footprint=1206
 }
 C 45100 43000 1 0 0 resistor-1.sym
 {
@@ -644,6 +674,8 @@ T 47850 49150 5 10 0 0 0 6 1
 device=LED
 T 48350 49050 5 10 1 1 0 6 1
 refdes=D2
+T 48800 48500 5 10 0 0 0 0 1
+footprint=1206
 }
 C 48800 48600 1 0 0 resistor-1.sym
 {
@@ -659,3 +691,5 @@ footprint=0805
 N 47900 48700 47900 50400 4
 C 49900 48400 1 0 0 gnd-1.sym
 N 49700 48700 50000 48700 4
+T 50500 49000 9 10 1 0 0 0 1
+Note: C6 must have ESR > 0.2 ohms and less than 10 ohms
