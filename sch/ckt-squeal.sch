@@ -1,4 +1,4 @@
-v 20121123 2
+v 20130925 2
 T 55700 36100 9 10 1 0 0 0 1
 Simple Sound Module
 T 55600 35800 9 10 1 0 0 0 1
@@ -47,7 +47,7 @@ refdes=U4
 T 44100 50500 5 10 0 0 0 0 1
 device=ATTiny861-MLP32
 T 44100 50700 5 10 0 0 0 0 1
-footprint=TQFP32_7
+footprint=QFN32_5x5_0.5
 }
 C 42000 45600 1 0 1 avrprog-1.sym
 {
@@ -109,6 +109,8 @@ T 46700 38000 5 10 0 0 270 0 1
 device=VARIABLE_RESISTOR
 T 46200 37900 5 10 1 1 90 0 1
 refdes=R9
+T 45800 38800 5 10 0 0 0 0 1
+footprint=TC33_trimmer
 }
 C 45800 37600 1 0 0 gnd-1.sym
 N 45600 38800 45900 38800 4
@@ -122,7 +124,9 @@ device=Capacitor
 T 49000 39600 5 10 1 1 0 0 1
 refdes=C10
 T 49000 39400 5 10 1 1 0 2 1
-value=22uF
+value=2.2uF
+T 48400 39300 5 10 0 0 0 0 1
+footprint=cap-elec-Nichicon-WJ--D4.00-H5.40-mm
 }
 N 46400 38300 46600 38300 4
 C 51300 37400 1 0 0 lm4864-1.sym
@@ -210,7 +214,9 @@ device=Capacitor
 T 48800 38200 5 10 1 1 0 0 1
 refdes=C11
 T 48800 38000 5 10 1 1 0 2 1
-value=22uF
+value=2.2uF
+T 48200 37900 5 10 0 0 0 0 1
+footprint=cap-elec-Nichicon-WJ--D4.00-H5.40-mm
 }
 C 44800 49800 1 0 0 lm7805-1.sym
 {
@@ -218,6 +224,8 @@ T 46400 51100 5 10 0 0 0 0 1
 device=7805
 T 45600 50800 5 10 1 1 0 6 1
 refdes=U1
+T 44800 49800 5 10 0 0 0 0 1
+footprint=TO220
 }
 C 52100 41100 1 0 0 5V-plus-1.sym
 N 46300 50400 48700 50400 4
@@ -339,8 +347,6 @@ C 60100 52600 1 180 0 dm3at.sym
 {
 T 59800 48550 5 10 0 0 180 0 1
 device=SD Memory Card
-T 59800 48350 5 10 0 0 180 0 1
-footprint=sdcard
 T 58800 51000 5 10 0 1 180 0 1
 footprint=hirose-dm3at
 T 60400 50700 5 10 1 1 180 0 1
@@ -479,7 +485,7 @@ C 55200 43200 1 0 0 cpdt6-5v4.sym
 T 57900 45100 5 10 1 1 0 6 1
 refdes=U6
 T 55400 45600 5 10 0 0 0 0 1
-footprint=SOT-26
+footprint=SOT26
 }
 C 59700 44500 1 0 0 termblk2-1.sym
 {
