@@ -717,9 +717,9 @@ C 46500 36800 1 90 0 resistor-1.sym
 T 46100 37100 5 10 0 0 90 0 1
 device=RESISTOR
 T 46200 37300 5 10 1 1 90 0 1
-refdes=R10
+refdes=R11
 T 46200 36900 5 10 1 1 90 0 1
-value=20k
+value=10k
 T 46500 36800 5 10 0 0 90 0 1
 footprint=0805
 }
@@ -728,9 +728,9 @@ C 46500 37900 1 90 0 resistor-1.sym
 T 46100 38200 5 10 0 0 90 0 1
 device=RESISTOR
 T 46200 38400 5 10 1 1 90 0 1
-refdes=R10
+refdes=R12
 T 46200 38000 5 10 1 1 90 0 1
-value=20k
+value=27k
 T 46500 37900 5 10 0 0 90 0 1
 footprint=0805
 }
