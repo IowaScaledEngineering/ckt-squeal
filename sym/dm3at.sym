@@ -28,7 +28,7 @@ pinnumber=2
 T 1500 4750 5 8 0 1 180 8 1
 pinseq=2
 T 1407 4644 9 8 1 1 0 6 1
-pinlabel=CD/DAT3
+pinlabel=DAT3/CS
 T 1350 4700 5 8 0 1 180 2 1
 pintype=pas
 }
@@ -39,7 +39,7 @@ pinnumber=3
 T 1500 4450 5 8 0 1 180 8 1
 pinseq=3
 T 1404 4346 9 8 1 1 0 6 1
-pinlabel=CMD
+pinlabel=CMD/SDI
 T 1350 4400 5 8 0 1 180 2 1
 pintype=pas
 }
@@ -83,7 +83,7 @@ pinnumber=7
 T 1500 3250 5 8 0 1 180 8 1
 pinseq=7
 T 1404 3147 9 8 1 1 0 6 1
-pinlabel=DAT0
+pinlabel=DAT0/SDO
 T 1350 3200 5 8 0 1 180 2 1
 pintype=pas
 }
