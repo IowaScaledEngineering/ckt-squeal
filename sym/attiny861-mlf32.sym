@@ -238,3 +238,14 @@ pinlabel=(ADC6/AIN1/PCINT7) PA7
 T 6150 1100 5 8 0 1 0 8 1
 pintype=io
 }
+P 3800 200 3800 500 1 0 0
+{
+T 3850 300 5 8 1 1 0 0 1
+pinnumber=33
+T 3850 300 5 8 0 1 0 2 1
+pinseq=33
+T 3800 550 9 8 1 1 0 3 1
+pinlabel=PAD
+T 3800 700 5 8 0 1 0 3 1
+pintype=pwr
+}
