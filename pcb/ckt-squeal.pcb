@@ -6,7 +6,7 @@ FileVersion[20070407]
 PCB["" 225000 140000]
 
 Grid[500.0 0 0 1]
-Cursor[94000 75500 0.000000]
+Cursor[32500 45000 0.000000]
 PolyArea[200000000.000000]
 Thermal[0.500000]
 DRC[800 800 800 800 2000 800]
@@ -2262,6 +2262,11 @@ Layer(5 "silk")
 	Text[218500 95500 1 100 "SW2" "clearline"]
 	Text[218500 35500 1 100 "SW3" "clearline"]
 	Text[218500 16000 1 100 "SW4" "clearline"]
+	Text[167000 109000 0 100 "+" "clearline"]
+	Text[138500 109000 0 100 "+" "clearline"]
+	Text[153000 109000 0 100 "+" "clearline"]
+	Text[185500 78000 0 100 "." "clearline"]
+	Text[89000 35500 0 100 "+" "clearline"]
 )
 NetList()
 (
