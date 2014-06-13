@@ -258,7 +258,6 @@ static uint8_t play(uint8_t (*terminationCallback)(), uint8_t flags)
 				if (rb != 1024)
 					break;		/* Break on error or end of data */
 				sz -= rb;					/* Decrease data counter */
-				randomizer += OCR1B ^ OCR1A;
 			} while (sz > 0);
 			
 			if (flags & EVENT_RETRIGGERABLE)
@@ -389,9 +388,8 @@ int main (void)
 	
 	uint8_t i;
 	uint8_t fsActive = 0;
-	uint8_t fileNum = 0;
-	uint8_t eventWavFiles[4];
-	uint8_t eventTriggerOptions[4];
+	uint8_t eventWavFiles[4] = {0,0,0,0};
+	uint8_t eventTriggerOptions[4] = {0,0,0,0};
 	uint8_t last_io_input = 0xFF;	
 	
 	MCUSR = 0;								// Clear reset status
@@ -488,9 +486,8 @@ int main (void)
 			{
 				if (isDown)
 				{
-					fileNum = randomizer % eventWavFiles[i];
 					// Level triggered sound and line is grounded - play
-					if (0 == getFilenum(i, fileNum))
+					if (0 == getFilenum(i, randomizer % eventWavFiles[i]))
 					{
 						do 
 						{
