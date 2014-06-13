@@ -477,6 +477,11 @@ int main (void)
 		{
 			uint8_t isDown = (~io_input) & (1<<i);
 			wdt_reset();
+
+			// If there aren't any WAV files for this event, don't even consider it for playback
+			if (0 == eventWavFiles[i])
+				continue;
+
 			levelTriggerMask = 0;
 			
 			if ((eventTriggerOptions[i] & EVENT_TRIGGER_LEVEL))
