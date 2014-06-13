@@ -102,8 +102,8 @@ fb_wave: ; Forward intermediate data bytes to the wave FIFO
 	ror	r20			;/
 	lds	r22, FifoWi		;r22 = FIFO write index
 
-3:	ldi	XL, lo8(Buff)		;X = Buff + R22
-	ldi	XH, hi8(Buff)		;
+3:	ldi	XL, lo8(audioFifoBuffer)		;X = Buff + R22
+	ldi	XH, hi8(audioFifoBuffer)		;
 	add	XL, r22			;
 	adc	XH, r1			;/
 4:	lds	r24, FifoCt		;wait while FIFO full
@@ -180,13 +180,13 @@ TIMER0_COMPA_vect:
 	sts	FifoCt, r24			;Save FIFO data counter
 	lds	ZL, FifoRi			;Get FIFO read index
 	clr	ZH				;Z = pointer to the top of FIFO
-	subi	ZL, lo8(-(Buff))		;
-	sbci	ZH, hi8(-(Buff))		;/
+	subi	ZL, lo8(-(audioFifoBuffer))		;
+	sbci	ZH, hi8(-(audioFifoBuffer))		;/
 	ld	r24, Z+				;Send -/Rch/LSB data to OC1A
 	out	_SFR_IO_ADDR(OCR1A), r24	;/
 	ld	r24, Z+				;Send +/Lch/MSB data to OC1B
 	out	_SFR_IO_ADDR(OCR1B), r24	;/
-	subi	ZL, lo8(Buff)			;Save FIFO read index
+	subi	ZL, lo8(audioFifoBuffer)			;Save FIFO read index
 	sts	FifoRi, ZL			;/
 9:
 	pop	ZH				;Restore regs.
