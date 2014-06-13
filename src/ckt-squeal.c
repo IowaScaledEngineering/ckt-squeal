@@ -61,9 +61,21 @@ static void ramp (uint8_t dir)
 	} while (--n);
 }
 
-static void audio_on (void)	/* Enable audio output functions */
+void enableOutputAmplifier()
+{
+	PORTB |= _BV(PB2);
+}
+
+void disableOutputAmplifier()
+{
+	PORTB &= ~_BV(PB2);
+}
+
+
+void enableAudio(void)	/* Enable audio output functions */
 {
 	wdt_reset();
+	
 	if (!TCCR0B) {
 		FifoCt = 0; FifoRi = 0; FifoWi = 0;		/* Reset audio FIFO */
 		PLLCSR = 0b00000110;	/* Select PLL clock for TC1.ck */
@@ -74,16 +86,20 @@ static void audio_on (void)	/* Enable audio output functions */
 		TCCR0B = 0b00000010;
 		TIMSK = _BV(OCIE0A);
 	}
+	enableOutputAmplifier();
 }
 
-static void audio_off (void)	/* Disable audio output functions */
+void disableAudio(void)	/* Disable audio output functions */
 {
+	disableOutputAmplifier();
 	wdt_reset();
 	if (TCCR0B) {
 		TCCR0B = 0;				/* Stop audio timer */
 		ramp(0);				/* Ramp-down to GND level */
 		TCCR1A = 0;	TCCR1B = 0;	/* Stop PWM */
 	}
+	
+	
 }
 static uint32_t load_header (void)	/* 2:I/O error, 4:Invalid file, >=1024:Ok(number of samples) */
 {
@@ -205,13 +221,14 @@ static uint8_t play(uint8_t (*terminationCallback)(), uint8_t flags)
 			fsize = Fs.fsize;
 			sz_save = sz;
 		}
-		audio_on();
+
+		enableAudio();
 		do
 		{
 
 			if (sz < 1024)
 			{
-				audio_off();			
+				disableAudio();			
 				OCR1A = OCR1B = 0x80;	/* Return DAC out to center */
 				clearLed(GREEN_LED);
 				setLed(YELLOW_LED);
@@ -259,7 +276,7 @@ static uint8_t play(uint8_t (*terminationCallback)(), uint8_t flags)
 	setLed(YELLOW_LED);
 
 	while(FifoCt);
-	audio_off();
+	disableAudio();
 	OCR1A = 0x80; OCR1B = 0x80;	/* Return DAC out to center */
 	clearLed(GREEN_LED);
 
@@ -417,7 +434,8 @@ int main (void)
 		// Blink the red light and bump back to the top
 		if (!isCardInserted())
 		{
-			audio_off();
+			clearLed(YELLOW_LED);
+			disableAudio();
 			fsActive = 0;
 			blinkRedLed();
 			continue;
