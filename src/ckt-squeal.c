@@ -97,6 +97,7 @@ void disableAudio(void)	/* Disable audio output functions */
 		TCCR0B = 0;				/* Stop audio timer */
 		ramp(0);				/* Ramp-down to GND level */
 		TCCR1A = 0;	TCCR1B = 0;	/* Stop PWM */
+		OCR1A = OCR1B = 0x80;	/* Return DAC out to center */
 	}
 	
 	
@@ -212,7 +213,9 @@ static uint8_t play(uint8_t (*terminationCallback)(), uint8_t flags)
 
 	if (FR_OK == res)
 	{
-		sz = load_header();			/* Check file format and ready to play */
+		sz = load_header();
+
+		// If we're planning to retrigger, keep around the start of the file to avoid having to fetch it all again
 		if (flags & EVENT_RETRIGGERABLE)
 		{
 			fptr = Fs.fptr;
@@ -229,7 +232,6 @@ static uint8_t play(uint8_t (*terminationCallback)(), uint8_t flags)
 			if (sz < 1024)
 			{
 				disableAudio();			
-				OCR1A = OCR1B = 0x80;	/* Return DAC out to center */
 				clearLed(GREEN_LED);
 				setLed(YELLOW_LED);
 				return 255;	/* Cannot play this file */
@@ -276,9 +278,7 @@ static uint8_t play(uint8_t (*terminationCallback)(), uint8_t flags)
 
 	while(FifoCt);
 	disableAudio();
-	OCR1A = 0x80; OCR1B = 0x80;	/* Return DAC out to center */
 	clearLed(GREEN_LED);
-
 	return res;
 }
 
