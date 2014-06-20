@@ -86,7 +86,7 @@ void enableAudio(void)	/* Enable audio output functions */
 		TCCR0B = 0b00000010;
 		TIMSK = _BV(OCIE0A);
 	}
-	_delay_ms(100);
+	_delay_ms(200);
 	enableOutputAmplifier();
 }
 
