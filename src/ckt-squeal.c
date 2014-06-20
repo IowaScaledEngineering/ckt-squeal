@@ -63,12 +63,12 @@ static void ramp (uint8_t dir)
 
 void enableOutputAmplifier()
 {
-	PORTB |= _BV(PB2);
+	PORTB &= ~_BV(PB2);
 }
 
 void disableOutputAmplifier()
 {
-	PORTB &= ~_BV(PB2);
+	PORTB |= _BV(PB2);
 }
 
 
@@ -86,6 +86,7 @@ void enableAudio(void)	/* Enable audio output functions */
 		TCCR0B = 0b00000010;
 		TIMSK = _BV(OCIE0A);
 	}
+	_delay_ms(100);
 	enableOutputAmplifier();
 }
 
@@ -93,6 +94,7 @@ void disableAudio(void)	/* Disable audio output functions */
 {
 	disableOutputAmplifier();
 	wdt_reset();
+	_delay_ms(100);
 	if (TCCR0B) {
 		TCCR0B = 0;				/* Stop audio timer */
 		ramp(0);				/* Ramp-down to GND level */
@@ -254,7 +256,7 @@ static uint8_t play(uint8_t (*terminationCallback)(), uint8_t flags)
 				btr = (sz > 1024) ? 1024 : (WORD)sz;/* A chunk of audio data */
 				res = pf_read(0, btr, &rb);	/* Forward the data into audio FIFO */
 
-				if (0 == (++blinkCntr % 4))
+				if (0 == (++blinkCntr % 8))
 					PORTB ^= _BV(YELLOW_LED);
 
 				if (rb != 1024)
