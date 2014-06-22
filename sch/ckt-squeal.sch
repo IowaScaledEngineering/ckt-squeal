@@ -103,7 +103,7 @@ device=Capacitor
 T 48600 37700 5 10 1 1 0 0 1
 refdes=C10
 T 48600 37500 5 10 1 1 0 2 1
-value=1uF
+value=0.22uF
 T 48000 37400 5 10 0 0 0 0 1
 footprint=cap-elec-Nichicon-WJ--D4.00-H5.40-mm
 }
