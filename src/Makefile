@@ -34,8 +34,8 @@ FUSE_L  = 0xF1
 FUSE_H  = 0xD5
 FUSE_E  = 0xFF
 
-#PROGRAMMER_TYPE=avrispmkii
-PROGRAMMER_TYPE=usbtiny
+PROGRAMMER_TYPE=avrispmkii
+#PROGRAMMER_TYPE=usbtiny
 PROGRAMMER_PORT=usb
 
 DEFINES = 
@@ -47,11 +47,9 @@ AVRDUDE_SLOW = avrdude -P $(PROGRAMMER_PORT) -c $(PROGRAMMER_TYPE) -p $(DEVICE) 
 
 OBJS = ${SRCS:.c=.o} ${ASM_SRC:.S=.o}
 INCLUDES = -I. 
-CFLAGS  = $(INCLUDES) -Wall -O2 -std=gnu99 -gdwarf-2
-ASFLAGS = -Wa,-gstabs
-#-ffunction-sections -fdata-sections
-LDFLAGS = 
-#-Wl,-gc-sections
+CFLAGS  = $(INCLUDES) -Wall -Os -std=gnu99
+ASFLAGS = -ffunction-sections -fdata-sections
+LDFLAGS = -Wl,-gc-sections
 
 COMPILE = avr-gcc $(DEFINES) -DF_CPU=$(F_CPU) $(CFLAGS) $(LDFLAGS) -mmcu=$(DEVICE)
 

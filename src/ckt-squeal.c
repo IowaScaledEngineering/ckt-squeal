@@ -210,8 +210,8 @@ static uint8_t play(uint8_t (*terminationCallback)(), uint8_t flags)
 	uint16_t rb;
 	uint32_t fptr=0, org_clust=0, curr_clust=0, fsize=0, sz_save=0;
 
-	res = pf_open((char*)audioFifoBuffer);		/* Open sound file */	
-	FifoCt = 0; FifoRi = 0; FifoWi = 0;	/* Reset audio FIFO */
+	res = pf_open((char*)audioFifoBuffer);		// Open sound file
+	FifoCt = FifoRi = FifoWi = 0;  // Reset audio FIFO 
 
 	if (FR_OK == res)
 	{
@@ -242,17 +242,24 @@ static uint8_t play(uint8_t (*terminationCallback)(), uint8_t flags)
 			setLed(GREEN_LED);
 			pf_read(0, 512 - (Fs.fptr % 512), &rb);	/* Snip sector unaligned part */
 			sz -= rb;
-			do {	/* Data transfer loop */
+
+			// Main playback loop
+			do 
+			{	
+				// This loop runs for the entire length of playback - keep watchdog happy
 				wdt_reset();
+
+				// If there's a termination callback, go test it.  A true value will kick us out of playback
 				if (NULL != terminationCallback)
 				{
 					if (terminationCallback())
 					{
-						FifoCt = 0;
+						FifoCt = 0;  // Reset audio FIFO 
 						flags &= ~EVENT_RETRIGGERABLE;
 						break;
 					}
 				}
+
 				btr = (sz > 1024) ? 1024 : (WORD)sz;/* A chunk of audio data */
 				res = pf_read(0, btr, &rb);	/* Forward the data into audio FIFO */
 
