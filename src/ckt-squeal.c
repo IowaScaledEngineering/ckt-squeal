@@ -75,7 +75,6 @@ void disableOutputAmplifier()
 void enableAudio(void)	/* Enable audio output functions */
 {
 	wdt_reset();
-	
 	if (!TCCR0B) {
 		FifoCt = 0; FifoRi = 0; FifoWi = 0;		/* Reset audio FIFO */
 		PLLCSR = 0b00000110;	/* Select PLL clock for TC1.ck */
@@ -86,7 +85,7 @@ void enableAudio(void)	/* Enable audio output functions */
 		TCCR0B = 0b00000010;
 		TIMSK = _BV(OCIE0A);
 	}
-	_delay_ms(200);
+	_delay_ms(200);	
 	enableOutputAmplifier();
 }
 
@@ -426,7 +425,7 @@ int main (void)
 	//  PB6 - Green LED (AVR output, active high)
    //  PB7 - N/A, multiplexed with /RESET pin	
 	
-	PORTB = 0b00000001;		/* PORTB [-pppLLLH] */
+	PORTB = 0b00000101;		/* PORTB [-pppLLLH] */
 	DDRB  = 0b01111111;
 
 	setLed(RED_LED); // Initialize to the RED led on, indicating error
