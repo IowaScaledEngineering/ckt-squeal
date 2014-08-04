@@ -1,3 +1,53 @@
+/*************************************************************************
+Title:    CKT-SQUEAL audio player, v1.1
+Authors:  Nathan D. Holmes <maverick@drgw.net>
+          Portions copyright ChaN (http://elm-chan.org) and used under 
+           his/her free software terms
+File:     $Id: $
+License:  GNU General Public License v3
+
+CREDIT:
+    The basic idea behind this playback design, and much of the hard stuff -
+    the filesystem layer, the hand-tuned ASM routines - were borrowed
+    from an open source project by ChaN called the SD20P.  
+    http://elm-chan.org/works/sd20p/report.html
+    
+    I ran across ChaN's design for a cheap, simple audio player when I was 
+    working on much more complicated prototypes for the CKT-SQUEAL, and
+    his/her attiny861 design was sheer beauty in its simplicity.  Whoever ChaN
+    is, their work is both clever and amazing.
+    
+    To respect his terms, here is the license statement included at the top
+    of his source code:
+    
+    /  Copyright (C) 2013, ChaN, all right reserved.
+    / * This project is a free software and there is NO WARRANTY.
+    / * No restriction on use. You can use, modify and redistribute it for
+    /   personal, non-profit or commercial products UNDER YOUR RESPONSIBILITY.
+    / * Redistributions of source code must retain the above copyright notice.
+    
+    The filesystem module - PetitFS - is also some of ChaN's work, and is available
+    under an open license here:
+    
+    http://elm-chan.org/fsw/ff/00index_p.html
+
+LICENSE:
+    Copyright (C) 2014 Michael Petersen, Nathan Holmes, with portions
+    copyright 2013 ChaN (http://elm-chan.org)
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 3 of the License, or
+    any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+*************************************************************************/
+
+
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <avr/pgmspace.h>
