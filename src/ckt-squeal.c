@@ -2,6 +2,7 @@
 #include <avr/interrupt.h>
 #include <avr/pgmspace.h>
 #include <avr/wdt.h>
+#include <avr/eeprom.h>
 #include <util/delay.h>
 #include <string.h>
 #include <stdio.h>
@@ -14,6 +15,38 @@
 #define YELLOW_LED 5
 #define GREEN_LED  6
 
+EMPTY_INTERRUPT(PCINT_vect);
+
+/*---------------------------------------------------------*/
+/* Work Area                                               */
+/*---------------------------------------------------------*/
+
+volatile uint8_t FifoRi, FifoWi, FifoCt;	/* FIFO controls */
+uint8_t audioFifoBuffer[256];		/* Audio output FIFO */
+uint8_t eventWavFiles[4] = {0,0,0,0};
+uint8_t eventTriggerOptions[4] = {0,0,0,0};
+
+FATFS Fs;			/* File system object */
+DIR Dir;			/* Directory object */
+FILINFO Fno;		/* File information */
+
+/*
+void saveFS(FSSAVE* fssave)
+{
+	fssave->fptr = Fs.fptr;
+	fssave->org_clust = Fs.org_clust;
+	fssave->curr_clust = Fs.curr_clust;
+	fssave->fsize = Fs.fsize;
+}
+
+void loadFS(FSSAVE* fssave)
+{
+	Fs.fptr = fssave->fptr;
+	Fs.org_clust = fssave->org_clust;
+	Fs.curr_clust = fssave->curr_clust;
+	Fs.fsize = fssave->fsize;
+}*/
+
 void setLed(uint8_t whichLed)
 {
 	PORTB |= (1<<whichLed) & 0x70;
@@ -23,21 +56,6 @@ void clearLed(uint8_t whichLed)
 {
 	PORTB &= ~((1<<whichLed) & 0x70);
 }
-
-
-EMPTY_INTERRUPT(PCINT_vect);
-
-/*---------------------------------------------------------*/
-/* Work Area                                               */
-/*---------------------------------------------------------*/
-
-volatile uint8_t FifoRi, FifoWi, FifoCt;	/* FIFO controls */
-uint8_t audioFifoBuffer[256];		/* Audio output FIFO */
-
-
-FATFS Fs;			/* File system object */
-DIR Dir;			/* Directory object */
-FILINFO Fno;		/* File information */
 
 
 // Ramp-up/down audio output (anti-pop feature)
@@ -169,8 +187,7 @@ uint8_t levelTriggerMask = 0;
 
 uint8_t debounce_inputs()
 {
-	uint8_t io_rawInput = (PINA & 0xF0) >> 4;
-	uint8_t delta = io_rawInput ^ io_input;
+	uint8_t delta = ((PINA & 0xF0) >> 4) ^ io_input;
 	uint8_t changes;
 	static uint8_t clock_A=0, clock_B=0;
 
@@ -187,7 +204,8 @@ uint8_t debounce_inputs()
 #define EVENT_TRIGGER_LEVEL      0x01
 #define EVENT_RETRIGGERABLE      0x02
 #define EVENT_RANDOM_RETRIG      0x06
-
+#define EVENT_BEGIN_MIDDLE_END   0x08
+#define EVENT_ENABLE_AUDIO       0x10
 uint8_t terminationCallback()
 {
 		debounce_inputs();
@@ -199,32 +217,112 @@ uint8_t debouncingCallback()
 		debounce_inputs();
 		return 0;
 }
+#ifndef OLD_PLAY
+uint32_t fsave, szsave;
 
-static uint8_t play(uint8_t (*terminationCallback)(), uint8_t flags)
+
+void playInner(uint8_t (*terminationCallback)(), uint8_t flags, uint32_t sz)
 {
-	uint32_t sz;
 	uint8_t blinkCntr = 0;
-	FRESULT res;
 	uint16_t btr;
 	uint16_t rb;
-	uint32_t fptr=0, org_clust=0, curr_clust=0, fsize=0, sz_save=0;
-
-	res = pf_open((char*)audioFifoBuffer);		// Open sound file
+		
 	FifoCt = FifoRi = FifoWi = 0;  // Reset audio FIFO 
 
-	if (FR_OK == res)
-	{
-		sz = load_header();
+	fsave = Fs.fptr;
+	szsave = sz;
 
-		// If we're planning to retrigger, keep around the start of the file to avoid having to fetch it all again
+	if (flags & EVENT_ENABLE_AUDIO)
+		enableAudio();
+	else
+		TCCR0B = 0b00000010;
+
+	do
+	{
+		if (sz < 1024)
+		{
+			disableAudio();			
+			clearLed(GREEN_LED);
+			setLed(YELLOW_LED);
+			return;
+		}
+
+		setLed(GREEN_LED);
+		pf_read(0, 512 - (Fs.fptr % 512), &rb);	/* Snip sector unaligned part */
+		sz -= rb;
+
+		// Main playback loop
+		do 
+		{
+			// This loop runs for the entire length of playback - keep watchdog happy
+			wdt_reset();
+
+			// If there's a termination callback, go test it.  A true value will kick us out of playback
+			if (NULL != terminationCallback)
+			{
+				if (terminationCallback())
+				{
+					FifoCt = 0;  // Reset audio FIFO 
+					flags &= ~EVENT_RETRIGGERABLE;
+					break;
+				}
+			}
+
+			btr = (sz > 1024) ? 1024 : (WORD)sz;/* A chunk of audio data */
+			pf_read(0, btr, &rb);	/* Forward the data into audio FIFO */
+
+			if (0 == (++blinkCntr % 8))
+				PORTB ^= _BV(YELLOW_LED);
+
+			if (rb != 1024)
+				break;		/* Break on error or end of data */
+			sz -= rb;					/* Decrease data counter */
+		} while (sz > 0);
+		
 		if (flags & EVENT_RETRIGGERABLE)
 		{
-			fptr = Fs.fptr;
-			org_clust = Fs.org_clust;
-			curr_clust = Fs.curr_clust;
-			fsize = Fs.fsize;
-			sz_save = sz;
+			pf_lseek(fsave);
+			sz = szsave;
 		}
+		
+	} while (flags & EVENT_RETRIGGERABLE);
+
+	TCCR0B = 0;				/* Stop audio timer */
+
+	setLed(YELLOW_LED);
+}
+
+static void play(uint8_t (*terminationCallback)(), uint8_t flags)
+{
+	FifoCt = FifoRi = FifoWi = 0;  // Reset audio FIFO 
+
+	if (FR_OK == pf_open((char*)audioFifoBuffer))
+	{
+		playInner(terminationCallback, flags | EVENT_ENABLE_AUDIO, load_header());
+		while(FifoCt);
+		disableAudio();
+		clearLed(GREEN_LED);
+	}
+	
+	return;
+}
+#else
+static void play(uint8_t (*terminationCallback)(), uint8_t flags)
+{
+	uint8_t blinkCntr = 0;
+	uint16_t btr;
+	uint16_t rb;
+	uint32_t fsave, szsave;
+
+	FifoCt = FifoRi = FifoWi = 0;  // Reset audio FIFO 
+
+	if (FR_OK == pf_open((char*)audioFifoBuffer))
+	{
+		uint32_t sz = load_header();
+
+		// If we're planning to retrigger, keep around the start of the file to avoid having to fetch it all again
+		fsave = Fs.fptr;
+		szsave = sz;
 
 		enableAudio();
 		do
@@ -235,11 +333,11 @@ static uint8_t play(uint8_t (*terminationCallback)(), uint8_t flags)
 				disableAudio();			
 				clearLed(GREEN_LED);
 				setLed(YELLOW_LED);
-				return 255;	/* Cannot play this file */
+				return;	// Cannot play this file
 			}
 
 			setLed(GREEN_LED);
-			pf_read(0, 512 - (Fs.fptr % 512), &rb);	/* Snip sector unaligned part */
+			pf_read(0, 512 - (Fs.fptr % 512), &rb);	// Snip sector unaligned part
 			sz -= rb;
 
 			// Main playback loop
@@ -260,7 +358,8 @@ static uint8_t play(uint8_t (*terminationCallback)(), uint8_t flags)
 				}
 
 				btr = (sz > 1024) ? 1024 : (WORD)sz;/* A chunk of audio data */
-				res = pf_read(0, btr, &rb);	/* Forward the data into audio FIFO */
+				if(FR_OK != pf_read(0, btr, &rb))
+					break;	/* Forward the data into audio FIFO */
 
 				if (0 == (++blinkCntr % 8))
 					PORTB ^= _BV(YELLOW_LED);
@@ -272,11 +371,8 @@ static uint8_t play(uint8_t (*terminationCallback)(), uint8_t flags)
 			
 			if (flags & EVENT_RETRIGGERABLE)
 			{
-				Fs.fptr = fptr;
-				Fs.org_clust = org_clust;
-				Fs.curr_clust = curr_clust;
-				Fs.fsize = fsize;
-				sz = sz_save;
+				pf_lseek(fsave);
+				sz = szsave;
 			}
 			
 		} while (flags & EVENT_RETRIGGERABLE);
@@ -287,16 +383,14 @@ static uint8_t play(uint8_t (*terminationCallback)(), uint8_t flags)
 	while(FifoCt);
 	disableAudio();
 	clearLed(GREEN_LED);
-	return res;
 }
+#endif
+#define FILE_BEGIN  1
+#define FILE_MIDDLE 2
+#define FILE_END    3
 
-
-
-uint8_t getFilenum(uint8_t eventNum, uint8_t fileNum)
+uint8_t igetFile(uint8_t eventNum)
 {
-	uint8_t fileCount = 0;
-	FRESULT res;
-	audioFifoBuffer[0] = 0;
 	strcpy_P((char*)audioFifoBuffer, PSTR("eventX"));
 	audioFifoBuffer[5] = eventNum + '1';
 
@@ -304,6 +398,60 @@ uint8_t getFilenum(uint8_t eventNum, uint8_t fileNum)
 		return 1;
 
 	if (FR_OK != pf_readdir(&Dir, 0))
+		return 1;
+
+	return 0;
+}
+
+uint8_t getBME(uint8_t eventNum, uint8_t bme)
+{
+	FRESULT res;
+
+	if (0 != igetFile(eventNum))
+		return 1;
+		
+	do
+	{
+		res = pf_readdir(&Dir, &Fno);
+		if (res || !Fno.fname[0])
+			break;	// Break on error or end of dir
+		if (!(Fno.fattrib & (AM_DIR|AM_HID)))
+		{
+			switch(bme)
+			{
+				case FILE_BEGIN:
+					eventNum = (uint8_t)strstr_P(Fno.fname, PSTR("BEGIN.WAV"));
+					break;
+				case FILE_MIDDLE:
+					eventNum = (uint8_t)strstr_P(Fno.fname, PSTR("MIDDLE.WAV"));
+					break;
+				case FILE_END:
+					eventNum = (uint8_t)strstr_P(Fno.fname, PSTR("END.WAV"));
+					break;
+			}
+
+			if (eventNum)
+			{
+				audioFifoBuffer[6] = '/';
+				audioFifoBuffer[7] = 0;
+				strcat((char*)audioFifoBuffer, Fno.fname);
+				return 0;
+			}
+		}
+	} while (FR_OK == res);			
+
+	return 1;
+}
+
+
+uint8_t getFilenum(uint8_t eventNum, uint8_t fileNum)
+{
+	uint8_t fileCount = 0;
+	uint8_t res;
+	strcpy_P((char*)audioFifoBuffer, PSTR("eventX"));
+	audioFifoBuffer[5] = eventNum + '1';
+
+	if (0 != igetFile(eventNum))
 		return 1;
 	
 	do
@@ -328,12 +476,12 @@ uint8_t getFilenum(uint8_t eventNum, uint8_t fileNum)
 		
 }
 
-uint8_t isCardInserted()
+inline uint8_t isCardInserted()
 {
 	return (!(PINA & _BV(3)));
 }
 
-void blinkRedLed()
+inline void blinkRedLed()
 {
 	setLed(RED_LED);
 	_delay_ms(100);
@@ -341,15 +489,13 @@ void blinkRedLed()
 	_delay_ms(100);
 }
 
-uint8_t readConfigAndFiles(uint8_t* eventWavFiles, uint8_t* eventTriggerOptions)
+inline uint8_t readConfigAndFiles()
 {
 	uint8_t i;
-	FRESULT res;
 	for (i=0; i<4; i++)
 	{
 		eventWavFiles[i] = 0;
 		eventTriggerOptions[i] = 0;
-		memset(audioFifoBuffer, 0, sizeof(audioFifoBuffer));
 		strcpy_P((char*)audioFifoBuffer, PSTR("eventX"));
 		audioFifoBuffer[5] = i + '1';
 						
@@ -361,46 +507,63 @@ uint8_t readConfigAndFiles(uint8_t* eventWavFiles, uint8_t* eventTriggerOptions)
 		
 		do
 		{
-			wdt_reset();
-			if (FR_OK == (res = pf_readdir(&Dir, &Fno)))
+			if (FR_OK != pf_readdir(&Dir, &Fno))
+				break;
+			if (!Fno.fname[0])
+				break;	// Break on error or end of dir
+			if (!(Fno.fattrib & (AM_DIR|AM_HID)))
 			{
-				if (!Fno.fname[0])
-					break;	// Break on error or end of dir
-				if (!(Fno.fattrib & (AM_DIR|AM_HID)))
+				if(strstr_P(Fno.fname, PSTR(".WAV")))
 				{
-					if(strstr_P(Fno.fname, PSTR(".WAV")))
-					{
-						eventWavFiles[i]++;
-					}
-					else
-					{
-						if (strstr_P(Fno.fname, PSTR("LVLTRIG.OPT")))
-							eventTriggerOptions[i] |= EVENT_TRIGGER_LEVEL;
-						else if (strstr_P(Fno.fname, PSTR("RETRIG.OPT")))
-							eventTriggerOptions[i] |= EVENT_RETRIGGERABLE;
-						else if (strstr_P(Fno.fname, PSTR("RNDRTRG.OPT")))
-							eventTriggerOptions[i] |= EVENT_RANDOM_RETRIG;
+					eventWavFiles[i]++;
+				}
+				else
+				{
+					if (strstr_P(Fno.fname, PSTR("LVLTRIG.OPT")))
+						eventTriggerOptions[i] |= EVENT_TRIGGER_LEVEL;
+					else if (strstr_P(Fno.fname, PSTR("RETRIG.OPT")))
+						eventTriggerOptions[i] |= EVENT_RETRIGGERABLE;
+					else if (strstr_P(Fno.fname, PSTR("RNDRTRG.OPT")))
+						eventTriggerOptions[i] |= EVENT_RANDOM_RETRIG;
+					else if (strstr_P(Fno.fname, PSTR("BME.OPT")))
+						eventTriggerOptions[i] |= EVENT_BEGIN_MIDDLE_END;						
 
-					}
 				}
 			}
 		
-		} while (FR_OK == res);
+		} while (1);
 	}
 	return 1;
 }
 
+void saveFS(uint16_t eepromBase, uint32_t sz)
+{
+	eeprom_update_dword((uint32_t*)eepromBase, Fs.fptr);
+	eeprom_update_dword((uint32_t*)(eepromBase+4), Fs.fsize);
+	eeprom_update_dword((uint32_t*)(eepromBase+8), Fs.org_clust);
+	eeprom_update_dword((uint32_t*)(eepromBase+12), Fs.curr_clust);	
+	eeprom_update_dword((uint32_t*)(eepromBase+16), sz);
+}
+
+uint32_t loadFS(uint16_t eepromBase)
+{
+	Fs.fptr = eeprom_read_dword((uint32_t*)eepromBase);
+	Fs.fsize = eeprom_read_dword((uint32_t*)(eepromBase + 4));
+	Fs.org_clust = eeprom_read_dword((uint32_t*)(eepromBase + 8));
+	Fs.curr_clust = eeprom_read_dword((uint32_t*)(eepromBase + 12));	
+	pf_lseek(Fs.fptr);
+	return eeprom_read_dword((uint32_t*)(eepromBase + 16));
+}
 
 int main (void)
 {
-	
 	uint8_t i;
 	uint8_t fsActive = 0;
-	uint8_t eventWavFiles[4] = {0,0,0,0};
-	uint8_t eventTriggerOptions[4] = {0,0,0,0};
 	uint8_t last_io_input = 0xFF;	
 	
 	MCUSR = 0;								// Clear reset status
+	wdt_reset();
+//	wdt_disable();
 	WDTCR = _BV(WDE) | _BV(WDP3);		// Enable WDT (2s)
 
 	// Initialize ports 
@@ -460,7 +623,7 @@ int main (void)
 			if (FR_OK == pf_mount(&Fs))
 			{
 				setLed(YELLOW_LED);
-				fsActive = readConfigAndFiles(eventWavFiles, eventTriggerOptions);
+				fsActive = readConfigAndFiles();
 			}
 			
 		}
@@ -482,41 +645,78 @@ int main (void)
 		for(i=0; i<4; i++)
 		{
 			uint8_t isDown = (~io_input) & (1<<i);
-			wdt_reset();
-
 			// If there aren't any WAV files for this event, don't even consider it for playback
 			if (0 == eventWavFiles[i])
 				continue;
 
 			levelTriggerMask = 0;
 			
-			if ((eventTriggerOptions[i] & EVENT_TRIGGER_LEVEL))
+			if ((eventTriggerOptions[i] & EVENT_BEGIN_MIDDLE_END) && isDown)
 			{
-				if (isDown)
+				if (0 == getBME(i, FILE_MIDDLE))
 				{
-					// Level triggered sound and line is grounded - play
-					if (0 == getFilenum(i, randomizer % eventWavFiles[i]))
+					if (FR_OK == pf_open((char*)audioFifoBuffer))
 					{
-						do 
-						{
-							wdt_reset();
-							levelTriggerMask = (1<<i);
-							play(&terminationCallback, eventTriggerOptions[i] & EVENT_RETRIGGERABLE);
-							if (EVENT_RANDOM_RETRIG & eventTriggerOptions[i])
-							{
-								if (0 != getFilenum(i, randomizer % eventWavFiles[i]))
-									break;
-							}
-						} while ((EVENT_RANDOM_RETRIG & eventTriggerOptions[i]) && (~io_input) & (1<<i));
-				
-					} 
-					break;
+						szsave = load_header();
+						saveFS(0x10, szsave);
+					}
 				}
+
+				if (0 == getBME(i, FILE_END))
+				{
+					if(FR_OK == pf_open((char*)audioFifoBuffer))
+					{
+						szsave = load_header();
+						saveFS(0x40, szsave);
+					}
+				}
+				// Level triggered sound and line is grounded - play
+
+				if (0 == getBME(i, FILE_BEGIN))
+				{
+
+					if (FR_OK == pf_open((char*)audioFifoBuffer))
+					{
+						playInner(&debouncingCallback, EVENT_ENABLE_AUDIO, load_header());
+
+						// Only play the middle if we have a beginning
+
+						while((szsave = loadFS(0x10)) && (~io_input) & (1<<i))
+						{
+							// Loop playback over middle audio until the pin rises
+							playInner(&debouncingCallback, 0, szsave);
+						}
+
+						if (szsave = loadFS(0x40))
+						{
+							playInner(&debouncingCallback, 0, szsave);
+						}
+						disableAudio();
+						clearLed(GREEN_LED); 
+					}
+				}
+			} else if ((eventTriggerOptions[i] & EVENT_TRIGGER_LEVEL) && isDown) {
+				// Level triggered sound and line is grounded - play
+				if (0 == getFilenum(i, randomizer % eventWavFiles[i]))
+				{
+					do 
+					{
+						levelTriggerMask = (1<<i);
+						play(&terminationCallback, eventTriggerOptions[i] & EVENT_RETRIGGERABLE);
+						if (EVENT_RANDOM_RETRIG & eventTriggerOptions[i])
+						{
+							if (0 != getFilenum(i, randomizer % eventWavFiles[i]))
+								break;
+						}
+					} while ((EVENT_RANDOM_RETRIG & eventTriggerOptions[i]) && (~io_input) & (1<<i));
+			
+				} 
+				break;
 			}
 			else
 			{
 				// Edge triggered
-				if (((~io_input) & (1<<i)) & ~(last_io_input))
+				if (isDown & ~(last_io_input))
 				{
 					// Edge triggered and fell since last time
 					last_io_input |= (~io_input) & (1<<i);
@@ -526,14 +726,13 @@ int main (void)
 					{
 						do 
 						{
-							wdt_reset();
 							play(&debouncingCallback, eventTriggerOptions[i] & EVENT_RETRIGGERABLE);
 							if (EVENT_RANDOM_RETRIG & eventTriggerOptions[i])
 							{
 								if (0 != getFilenum(i, randomizer % eventWavFiles[i]))
 									break;
 							}
-						} while ((eventTriggerOptions[i] & EVENT_RETRIGGERABLE) && ((~io_input) & (1<<i)));
+						} while ((eventTriggerOptions[i] & EVENT_RETRIGGERABLE) && (~io_input) & (1<<i));
 					}
 					break;
 				}
