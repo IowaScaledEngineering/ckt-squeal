@@ -537,7 +537,7 @@ int main (void)
 	MCUSR = 0;								// Clear reset status
 	wdt_reset();
 //	wdt_disable();
-	WDTCR = _BV(WDE) | _BV(WDP2);		// Enable WDT (2s)
+	WDTCR = _BV(WDE) | _BV(WDP3);		// Enable WDT (2s)
 
 	// Initialize ports 
 	// Pin Assignments for PORTA/DDRA
