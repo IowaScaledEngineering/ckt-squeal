@@ -65,6 +65,8 @@ LICENSE:
 #define YELLOW_LED 5
 #define GREEN_LED  6
 
+#define LED_BLINK_MOD 128
+
 EMPTY_INTERRUPT(PCINT_vect);
 
 /*---------------------------------------------------------*/
@@ -267,9 +269,8 @@ uint8_t debouncingCallback()
 		debounce_inputs();
 		return 0;
 }
-#ifndef OLD_PLAY
-uint32_t fsave, szsave;
 
+uint32_t fsave, szsave;
 
 void playInner(uint8_t (*terminationCallback)(), uint8_t flags, uint32_t sz)
 {
@@ -321,7 +322,7 @@ void playInner(uint8_t (*terminationCallback)(), uint8_t flags, uint32_t sz)
 			btr = (sz > 1024) ? 1024 : (WORD)sz;/* A chunk of audio data */
 			pf_read(0, btr, &rb);	/* Forward the data into audio FIFO */
 
-			if (0 == (++blinkCntr % 8))
+			if (0 == (++blinkCntr % LED_BLINK_MOD))
 				PORTB ^= _BV(YELLOW_LED);
 
 			if (rb != 1024)
@@ -356,85 +357,7 @@ static void play(uint8_t (*terminationCallback)(), uint8_t flags)
 	
 	return;
 }
-#else
-static void play(uint8_t (*terminationCallback)(), uint8_t flags)
-{
-	uint8_t blinkCntr = 0;
-	uint16_t btr;
-	uint16_t rb;
-	uint32_t fsave, szsave;
 
-	FifoCt = FifoRi = FifoWi = 0;  // Reset audio FIFO 
-
-	if (FR_OK == pf_open((char*)audioFifoBuffer))
-	{
-		uint32_t sz = load_header();
-
-		// If we're planning to retrigger, keep around the start of the file to avoid having to fetch it all again
-		fsave = Fs.fptr;
-		szsave = sz;
-
-		enableAudio();
-		do
-		{
-
-			if (sz < 1024)
-			{
-				disableAudio();			
-				clearLed(GREEN_LED);
-				setLed(YELLOW_LED);
-				return;	// Cannot play this file
-			}
-
-			setLed(GREEN_LED);
-			pf_read(0, 512 - (Fs.fptr % 512), &rb);	// Snip sector unaligned part
-			sz -= rb;
-
-			// Main playback loop
-			do 
-			{	
-				// This loop runs for the entire length of playback - keep watchdog happy
-				wdt_reset();
-
-				// If there's a termination callback, go test it.  A true value will kick us out of playback
-				if (NULL != terminationCallback)
-				{
-					if (terminationCallback())
-					{
-						FifoCt = 0;  // Reset audio FIFO 
-						flags &= ~EVENT_RETRIGGERABLE;
-						break;
-					}
-				}
-
-				btr = (sz > 1024) ? 1024 : (WORD)sz;/* A chunk of audio data */
-				if(FR_OK != pf_read(0, btr, &rb))
-					break;	/* Forward the data into audio FIFO */
-
-				if (0 == (++blinkCntr % 8))
-					PORTB ^= _BV(YELLOW_LED);
-
-				if (rb != 1024)
-					break;		/* Break on error or end of data */
-				sz -= rb;					/* Decrease data counter */
-			} while (sz > 0);
-			
-			if (flags & EVENT_RETRIGGERABLE)
-			{
-				pf_lseek(fsave);
-				sz = szsave;
-			}
-			
-		} while (flags & EVENT_RETRIGGERABLE);
-	}
-
-	setLed(YELLOW_LED);
-
-	while(FifoCt);
-	disableAudio();
-	clearLed(GREEN_LED);
-}
-#endif
 #define FILE_BEGIN  1
 #define FILE_MIDDLE 2
 #define FILE_END    3
@@ -470,13 +393,13 @@ uint8_t getBME(uint8_t eventNum, uint8_t bme)
 			switch(bme)
 			{
 				case FILE_BEGIN:
-					eventNum = (uint8_t)strstr_P(Fno.fname, PSTR("BEGIN.WAV"));
+					eventNum = (uint8_t)(uint16_t)strstr_P(Fno.fname, PSTR("BEGIN.WAV"));
 					break;
 				case FILE_MIDDLE:
-					eventNum = (uint8_t)strstr_P(Fno.fname, PSTR("MIDDLE.WAV"));
+					eventNum = (uint8_t)(uint16_t)strstr_P(Fno.fname, PSTR("MIDDLE.WAV"));
 					break;
 				case FILE_END:
-					eventNum = (uint8_t)strstr_P(Fno.fname, PSTR("END.WAV"));
+					eventNum = (uint8_t)(uint16_t)strstr_P(Fno.fname, PSTR("END.WAV"));
 					break;
 			}
 
@@ -531,7 +454,7 @@ inline uint8_t isCardInserted()
 	return (!(PINA & _BV(3)));
 }
 
-inline void blinkRedLed()
+void blinkRedLed()
 {
 	setLed(RED_LED);
 	_delay_ms(100);
@@ -614,7 +537,7 @@ int main (void)
 	MCUSR = 0;								// Clear reset status
 	wdt_reset();
 //	wdt_disable();
-	WDTCR = _BV(WDE) | _BV(WDP3);		// Enable WDT (2s)
+	WDTCR = _BV(WDE) | _BV(WDP2);		// Enable WDT (2s)
 
 	// Initialize ports 
 	// Pin Assignments for PORTA/DDRA
@@ -737,7 +660,7 @@ int main (void)
 							playInner(&debouncingCallback, 0, szsave);
 						}
 
-						if (szsave = loadFS(0x40))
+						if (0 != (szsave = loadFS(0x40)))
 						{
 							playInner(&debouncingCallback, 0, szsave);
 						}
