@@ -255,6 +255,7 @@ uint8_t debounce_inputs()
 
 #define EVENT_TRIGGER_LEVEL      0x01
 #define EVENT_RETRIGGERABLE      0x02
+#define EVENT_RANDOM             0x04
 #define EVENT_RANDOM_RETRIG      0x06
 #define EVENT_BEGIN_MIDDLE_END   0x08
 #define EVENT_ENABLE_AUDIO       0x10
@@ -307,16 +308,13 @@ void playInner(uint8_t (*terminationCallback)(), uint8_t flags, uint32_t sz)
 		{
 			// This loop runs for the entire length of playback - keep watchdog happy
 			wdt_reset();
-
+			randomizer += TCNT1;
 			// If there's a termination callback, go test it.  A true value will kick us out of playback
-			if (NULL != terminationCallback)
+			if ((NULL != terminationCallback) && terminationCallback())
 			{
-				if (terminationCallback())
-				{
-					FifoCt = 0;  // Reset audio FIFO 
-					flags &= ~EVENT_RETRIGGERABLE;
-					break;
-				}
+				FifoCt = 0;  // Reset audio FIFO 
+				flags &= ~EVENT_RETRIGGERABLE;
+				break;
 			}
 
 			btr = (sz > 1024) ? 1024 : (WORD)sz;/* A chunk of audio data */
@@ -350,7 +348,7 @@ static void play(uint8_t (*terminationCallback)(), uint8_t flags)
 	if (FR_OK == pf_open((char*)audioFifoBuffer))
 	{
 		playInner(terminationCallback, flags | EVENT_ENABLE_AUDIO, load_header());
-		while(FifoCt);
+//		while(FifoCt);
 		disableAudio();
 		clearLed(GREEN_LED);
 	}
@@ -472,12 +470,9 @@ inline uint8_t readConfigAndFiles()
 		strcpy_P((char*)audioFifoBuffer, PSTR("eventX"));
 		audioFifoBuffer[5] = i + '1';
 						
-		if (FR_OK != pf_opendir(&Dir, (const char*)audioFifoBuffer))
+		if (FR_OK != pf_opendir(&Dir, (const char*)audioFifoBuffer) || FR_OK != pf_readdir(&Dir, 0))
 			return 0;
 
-		if (FR_OK != pf_readdir(&Dir, 0))
-			return 0;
-		
 		do
 		{
 			if (FR_OK != pf_readdir(&Dir, &Fno))
@@ -492,15 +487,20 @@ inline uint8_t readConfigAndFiles()
 				}
 				else
 				{
-					if (strstr_P(Fno.fname, PSTR("LVLTRIG.OPT")))
-						eventTriggerOptions[i] |= EVENT_TRIGGER_LEVEL;
-					else if (strstr_P(Fno.fname, PSTR("RETRIG.OPT")))
-						eventTriggerOptions[i] |= EVENT_RETRIGGERABLE;
-					else if (strstr_P(Fno.fname, PSTR("RNDRTRG.OPT")))
-						eventTriggerOptions[i] |= EVENT_RANDOM_RETRIG;
-					else if (strstr_P(Fno.fname, PSTR("BME.OPT")))
-						eventTriggerOptions[i] |= EVENT_BEGIN_MIDDLE_END;						
-
+					if (strstr_P(Fno.fname, PSTR("BME.OPT")))
+					{
+						// Beginning-middle-end mode precludes all other options
+						eventTriggerOptions[i] |= EVENT_BEGIN_MIDDLE_END;
+					}
+					else
+					{
+						if (strstr_P(Fno.fname, PSTR("LVLTRIG.OPT")))
+							eventTriggerOptions[i] |= EVENT_TRIGGER_LEVEL;
+						if (strstr_P(Fno.fname, PSTR("RETRIG.OPT")))
+							eventTriggerOptions[i] |= EVENT_RETRIGGERABLE;
+						if (strstr_P(Fno.fname, PSTR("RNDRTRG.OPT")))
+							eventTriggerOptions[i] |= EVENT_RANDOM_RETRIG;
+					}
 				}
 			}
 		
@@ -570,7 +570,6 @@ int main (void)
 	while(1)
 	{
 		wdt_reset();
-		randomizer++;
 
 		// If the card isn't there, don't really do much
 		// Blink the red light and bump back to the top
@@ -615,7 +614,7 @@ int main (void)
 
 		debounce_inputs();
 
-		for(i=0; i<4; i++)
+		for(i=0; i<4 && isCardInserted(); i++)
 		{
 			uint8_t isDown = (~io_input) & (1<<i);
 			// If there aren't any WAV files for this event, don't even consider it for playback
@@ -670,44 +669,36 @@ int main (void)
 				}
 			} else if ((eventTriggerOptions[i] & EVENT_TRIGGER_LEVEL) && isDown) {
 				// Level triggered sound and line is grounded - play
-				if (0 == getFilenum(i, randomizer % eventWavFiles[i]))
+				uint8_t chosenFile = randomizer % eventWavFiles[i];
+
+				while (0 == getFilenum(i, chosenFile) && ((~io_input) & (1<<i)))
 				{
-					do 
-					{
-						levelTriggerMask = (1<<i);
-						play(&terminationCallback, eventTriggerOptions[i] & EVENT_RETRIGGERABLE);
-						if (EVENT_RANDOM_RETRIG & eventTriggerOptions[i])
-						{
-							if (0 != getFilenum(i, randomizer % eventWavFiles[i]))
-								break;
-						}
-					} while ((EVENT_RANDOM_RETRIG & eventTriggerOptions[i]) && (~io_input) & (1<<i));
-			
+					levelTriggerMask = (1<<i);
+					// If it's level triggered but NOT RANDOM retrigger, we play the same track over and over again
+					// Otherwise, we play a new track every
+					play(&terminationCallback, (eventTriggerOptions[i] & EVENT_RANDOM)?0:EVENT_RETRIGGERABLE);
+					// If it's not retriggerable, break
+					if (0 == (EVENT_RETRIGGERABLE & eventTriggerOptions[i]))
+						break;
+
+					if (EVENT_RANDOM & eventTriggerOptions[i])
+						chosenFile = ++randomizer % eventWavFiles[i];
 				} 
-				break;
 			}
-			else
+			else if (isDown & ~(last_io_input))
 			{
 				// Edge triggered
-				if (isDown & ~(last_io_input))
-				{
-					// Edge triggered and fell since last time
-					last_io_input |= (~io_input) & (1<<i);
+				// Only trigger if the line fell since last time
+				uint8_t chosenFile = randomizer % eventWavFiles[i];
 				
-					// Level triggered sound and line is grounded - play
-					if (0 == getFilenum(i, randomizer % eventWavFiles[i]))
-					{
-						do 
-						{
-							play(&debouncingCallback, eventTriggerOptions[i] & EVENT_RETRIGGERABLE);
-							if (EVENT_RANDOM_RETRIG & eventTriggerOptions[i])
-							{
-								if (0 != getFilenum(i, randomizer % eventWavFiles[i]))
-									break;
-							}
-						} while ((eventTriggerOptions[i] & EVENT_RETRIGGERABLE) && (~io_input) & (1<<i));
-					}
-					break;
+				while ((0 == getFilenum(i, chosenFile)) && ((~io_input) & (1<<i)))
+				{
+					play(&debouncingCallback, 0);
+					// If it's not retriggerable, break
+					if (0 == (EVENT_RETRIGGERABLE & eventTriggerOptions[i]))
+						break;
+					if (EVENT_RANDOM & eventTriggerOptions[i])
+						chosenFile = randomizer % eventWavFiles[i];
 				}
 			}
 			
