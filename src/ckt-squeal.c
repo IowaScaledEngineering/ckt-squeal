@@ -234,6 +234,7 @@ static uint32_t load_header (void)	/* 2:I/O error, 4:Invalid file, >=1024:Ok(num
 }
 
 uint8_t io_input = 0xFF;
+uint8_t last_io_input = 0xFF;	
 uint8_t randomizer = 0;
 uint8_t levelTriggerMask = 0;
 
@@ -531,7 +532,6 @@ int main (void)
 {
 	uint8_t i;
 	uint8_t fsActive = 0;
-	uint8_t last_io_input = 0xFF;	
 	
 	MCUSR = 0;								// Clear reset status
 	wdt_reset();
@@ -611,6 +611,8 @@ int main (void)
 		// Turn off any error indication that might be on
 		clearLed(RED_LED);
 
+		_delay_ms(10);
+
 		debounce_inputs();
 
 		randomizer++;
@@ -686,15 +688,16 @@ int main (void)
 						chosenFile = randomizer % eventWavFiles[i];
 				} 
 			}
-			else if (isDown & ~(last_io_input))
+			else if (isDown & last_io_input)
 			{
 				// Edge triggered
 				// Only trigger if the line fell since last time
 				uint8_t chosenFile = randomizer % eventWavFiles[i];
-				
+
 				while ((0 == getFilenum(i, chosenFile)) && ((~io_input) & (1<<i)))
 				{
 					play(&debouncingCallback, 0);
+
 					// If it's not retriggerable, break
 					if (0 == (EVENT_RETRIGGERABLE & eventTriggerOptions[i]))
 						break;
@@ -703,11 +706,9 @@ int main (void)
 						chosenFile = randomizer % eventWavFiles[i];
 				}
 			}
-			
-			last_io_input = io_input;
 		}
-		
-		
+
+		last_io_input = io_input;
 	}
 }
 
