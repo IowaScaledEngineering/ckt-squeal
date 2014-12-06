@@ -308,7 +308,7 @@ void playInner(uint8_t (*terminationCallback)(), uint8_t flags, uint32_t sz)
 		{
 			// This loop runs for the entire length of playback - keep watchdog happy
 			wdt_reset();
-			randomizer += TCNT1;
+			randomizer += (TCNT0L + TCNT1) ^ blinkCntr;
 			// If there's a termination callback, go test it.  A true value will kick us out of playback
 			if ((NULL != terminationCallback) && terminationCallback())
 			{
@@ -348,7 +348,6 @@ static void play(uint8_t (*terminationCallback)(), uint8_t flags)
 	if (FR_OK == pf_open((char*)audioFifoBuffer))
 	{
 		playInner(terminationCallback, flags | EVENT_ENABLE_AUDIO, load_header());
-//		while(FifoCt);
 		disableAudio();
 		clearLed(GREEN_LED);
 	}
@@ -614,6 +613,8 @@ int main (void)
 
 		debounce_inputs();
 
+		randomizer++;
+
 		for(i=0; i<4 && isCardInserted(); i++)
 		{
 			uint8_t isDown = (~io_input) & (1<<i);
@@ -680,9 +681,9 @@ int main (void)
 					// If it's not retriggerable, break
 					if (0 == (EVENT_RETRIGGERABLE & eventTriggerOptions[i]))
 						break;
-
+					// If it's random, pick a new file
 					if (EVENT_RANDOM & eventTriggerOptions[i])
-						chosenFile = ++randomizer % eventWavFiles[i];
+						chosenFile = randomizer % eventWavFiles[i];
 				} 
 			}
 			else if (isDown & ~(last_io_input))
@@ -697,6 +698,7 @@ int main (void)
 					// If it's not retriggerable, break
 					if (0 == (EVENT_RETRIGGERABLE & eventTriggerOptions[i]))
 						break;
+					// If it's random, pick a new file
 					if (EVENT_RANDOM & eventTriggerOptions[i])
 						chosenFile = randomizer % eventWavFiles[i];
 				}
