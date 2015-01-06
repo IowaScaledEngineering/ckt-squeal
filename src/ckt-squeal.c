@@ -471,7 +471,7 @@ inline uint8_t readConfigAndFiles()
 		audioFifoBuffer[5] = i + '1';
 						
 		if (FR_OK != pf_opendir(&Dir, (const char*)audioFifoBuffer) || FR_OK != pf_readdir(&Dir, 0))
-			return 0;
+			continue;
 
 		do
 		{
@@ -611,7 +611,7 @@ int main (void)
 		// Turn off any error indication that might be on
 		clearLed(RED_LED);
 
-		_delay_ms(10);
+//		_delay_ms(10);
 
 		debounce_inputs();
 
@@ -660,6 +660,7 @@ int main (void)
 						{
 							// Loop playback over middle audio until the pin rises
 							playInner(&debouncingCallback, 0, szsave);
+							debounce_inputs();
 						}
 
 						if (0 != (szsave = loadFS(0x40)))
@@ -686,7 +687,9 @@ int main (void)
 					// If it's random, pick a new file
 					if (EVENT_RANDOM & eventTriggerOptions[i])
 						chosenFile = randomizer % eventWavFiles[i];
-				} 
+					debounce_inputs();
+				}
+				
 			}
 			else if (isDown & last_io_input)
 			{
@@ -704,6 +707,7 @@ int main (void)
 					// If it's random, pick a new file
 					if (EVENT_RANDOM & eventTriggerOptions[i])
 						chosenFile = randomizer % eventWavFiles[i];
+					debounce_inputs();
 				}
 			}
 		}
