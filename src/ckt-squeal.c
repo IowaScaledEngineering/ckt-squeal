@@ -220,15 +220,13 @@ static uint32_t load_header (void)	/* 2:I/O error, 4:Invalid file, >=1024:Ok(num
 				if (Fs.fptr & (al - 1)) return 4;			/* Check offset */
 				return sz;
 
-			case FCC('D','I','S','P') :		/* 'DISP' chunk (skip) */
-			case FCC('f','a','c','t') :		/* 'fact' chunk (skip) */
-			case FCC('L','I','S','T') :		/* 'LIST' chunk (skip) */
+//			case FCC('D','I','S','P') :		/* 'DISP' chunk (skip) */
+//			case FCC('f','a','c','t') :		/* 'fact' chunk (skip) */
+//			case FCC('L','I','S','T') :		/* 'LIST' chunk (skip) */
+			default :						// All chunks we don't understand or care about
 				if (sz & 1) sz++;
 				if (pf_lseek(Fs.fptr + sz)) return 2;
 				break;
-
-			default :						/* Unknown chunk */
-				return 4;
 		}
 	}
 }
@@ -348,9 +346,17 @@ static void play(uint8_t (*terminationCallback)(), uint8_t flags)
 
 	if (FR_OK == pf_open((char*)audioFifoBuffer))
 	{
-		playInner(terminationCallback, flags | EVENT_ENABLE_AUDIO, load_header());
-		disableAudio();
-		clearLed(GREEN_LED);
+		uint32_t sz = load_header();
+		if (sz < 1024)
+		{
+			setLed(RED_LED);
+			_delay_ms(200);
+			clearLed(RED_LED);
+		} else {
+			playInner(terminationCallback, flags | EVENT_ENABLE_AUDIO, sz);
+			disableAudio();
+			clearLed(GREEN_LED);
+		}
 	}
 	
 	return;
@@ -391,17 +397,17 @@ uint8_t getBME(uint8_t eventNum, uint8_t bme)
 			switch(bme)
 			{
 				case FILE_BEGIN:
-					eventNum = (uint8_t)(uint16_t)strstr_P(Fno.fname, PSTR("BEGIN.WAV"));
+					eventNum = (uint8_t)(uint16_t)strcmp_P(Fno.fname, PSTR("BEGIN.WAV"));
 					break;
 				case FILE_MIDDLE:
-					eventNum = (uint8_t)(uint16_t)strstr_P(Fno.fname, PSTR("MIDDLE.WAV"));
+					eventNum = (uint8_t)(uint16_t)strcmp_P(Fno.fname, PSTR("MIDDLE.WAV"));
 					break;
 				case FILE_END:
-					eventNum = (uint8_t)(uint16_t)strstr_P(Fno.fname, PSTR("END.WAV"));
+					eventNum = (uint8_t)(uint16_t)strcmp_P(Fno.fname, PSTR("END.WAV"));
 					break;
 			}
 
-			if (eventNum)
+			if (0 == eventNum)
 			{
 				audioFifoBuffer[6] = '/';
 				audioFifoBuffer[7] = 0;
@@ -430,7 +436,7 @@ uint8_t getFilenum(uint8_t eventNum, uint8_t fileNum)
 		res = pf_readdir(&Dir, &Fno);
 		if (res || !Fno.fname[0])
 			break;	// Break on error or end of dir
-		if (!(Fno.fattrib & (AM_DIR|AM_HID)) && strstr(Fno.fname, ".WAV"))
+		if (!(Fno.fattrib & (AM_DIR|AM_HID)) && strstr(Fno.fname, ".WAV") && ('.' != Fno.fname[0]))
 		{
 			if (fileCount == fileNum)
 			{
@@ -481,24 +487,24 @@ inline uint8_t readConfigAndFiles()
 				break;	// Break on error or end of dir
 			if (!(Fno.fattrib & (AM_DIR|AM_HID)))
 			{
-				if(strstr_P(Fno.fname, PSTR(".WAV")))
+				if(strstr_P(Fno.fname, PSTR(".WAV")) && '.' != Fno.fname[0])
 				{
 					eventWavFiles[i]++;
 				}
 				else
 				{
-					if (strstr_P(Fno.fname, PSTR("BME.OPT")))
+					if (0 == strcmp_P(Fno.fname, PSTR("BME.OPT")))
 					{
 						// Beginning-middle-end mode precludes all other options
 						eventTriggerOptions[i] |= EVENT_BEGIN_MIDDLE_END;
 					}
 					else
 					{
-						if (strstr_P(Fno.fname, PSTR("LVLTRIG.OPT")))
+						if (0 == strcmp_P(Fno.fname, PSTR("LVLTRIG.OPT")))
 							eventTriggerOptions[i] |= EVENT_TRIGGER_LEVEL;
-						if (strstr_P(Fno.fname, PSTR("RETRIG.OPT")))
+						if (0 == strcmp_P(Fno.fname, PSTR("RETRIG.OPT")))
 							eventTriggerOptions[i] |= EVENT_RETRIGGERABLE;
-						if (strstr_P(Fno.fname, PSTR("RNDRTRG.OPT")))
+						if (0 == strcmp_P(Fno.fname, PSTR("RNDRTRG.OPT")))
 							eventTriggerOptions[i] |= EVENT_RANDOM_RETRIG;
 					}
 				}
